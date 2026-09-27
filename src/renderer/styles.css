@@ -1,0 +1,74 @@
+@import url('@xyflow/react/dist/style.css');
+:root { font-family: 'Segoe UI', Inter, sans-serif; color: #dce0eb; background: #13161c; font-synthesis: none; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button { font: inherit; color: inherit; cursor: pointer; border: 1px solid #343a48; background: #202530; border-radius: 6px; padding: 7px 12px; }
+button:hover:not(:disabled) { background: #303647; border-color: #716598; }
+button:focus-visible { outline: 2px solid #b8aaff; outline-offset: 2px; }
+button:disabled { cursor: default; opacity: .4; }
+kbd { font: 10px 'Segoe UI', sans-serif; color: #9298aa; margin-left: 16px; }
+.app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.topbar { height: 70px; flex-shrink: 0; border-bottom: 1px solid #2a2e39; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; gap: 20px; background: #181b23; }
+.brand { display: flex; align-items: center; font-size: 19px; font-weight: 600; letter-spacing: -.5px; gap: 11px; }
+.brand-mark { display: grid; place-items: center; width: 31px; height: 31px; color: #171323; background: #b9a5fa; border-radius: 9px; font: bold 21px Georgia, serif; }
+.badge { font-size: 8px; letter-spacing: 1.2px; color: #9291a4; border: 1px solid #383541; padding: 4px 5px; border-radius: 4px; margin-left: 2px; }
+.project-title { text-align: center; font-size: 12px; color: #bdc2d0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-title span { display: block; color: #747b8e; font-size: 8px; letter-spacing: 1.6px; margin-top: 5px; }
+.open-button { font-size: 11px; background: #242331; flex-shrink: 0; }
+.workspace { display: flex; flex: 1; min-height: 0; }
+.graph-pane { width: 44%; min-width: 310px; display: flex; flex-direction: column; background: #191d26; border-right: 1px solid #323744; }
+.pane-toolbar { display: flex; align-items: center; justify-content: space-between; height: 49px; flex-shrink: 0; padding: 0 18px; border-bottom: 1px solid #282d38; }
+.section-label { font-size: 9px; letter-spacing: 1.7px; color: #9ba3b5; }
+.nav-buttons { display: flex; gap: 5px; }
+.nav-buttons button { padding: 2px 9px; font-size: 17px; background: transparent; border-color: transparent; }
+.breadcrumb { font-size: 11px; padding: 13px 19px; color: #929bad; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.graph-canvas { flex: 1; min-height: 0; }
+.graph-footer { display: flex; justify-content: space-between; padding: 13px 17px; color: #747e92; font-size: 10px; gap: 8px; }
+.graph-node { width: 174px; min-height: 58px; border-radius: 9px; border: 1px solid #41485a; background: #222834; display: flex; align-items: center; padding: 12px; gap: 11px; box-shadow: 0 6px 22px #0002; }
+.graph-node:hover { border-color: #b3a0f2; background: #2d3041; }
+.graph-node.folder { border-color: #685881; background: #2b263a; }
+.graph-node.center { border-color: #b9a2fa; background: #3e3355; box-shadow: 0 0 32px #a391e21c; }
+.node-icon { color: #ab95e4; font-size: 22px; }
+.file .node-icon { color: #7aaac0; font-size: 17px; }
+.node-label { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.node-label small { display: block; margin-top: 6px; font-size: 7px; letter-spacing: 1px; color: #9895aa; }
+.react-flow__handle { opacity: 0; pointer-events: none; }
+.react-flow__edge-path { stroke: #555267; stroke-width: 1.3; }
+.react-flow__controls { box-shadow: none; border: 1px solid #343a48; border-radius: 6px; overflow: hidden; }
+.react-flow__controls-button { background: #252a36; border-color: #343a48; }
+.editor-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tabs { display: flex; overflow-x: auto; min-height: 49px; background: #171a22; border-bottom: 1px solid #282d38; }
+.tab { display: flex; align-items: stretch; flex-shrink: 0; border-right: 1px solid #292d38; border-top: 2px solid transparent; }
+.tab.active { background: #20232e; border-top-color: #b5a1ed; }
+.tab button { border: none; border-radius: 0; background: transparent; font-size: 11px; padding: 12px 9px 12px 13px; }
+.tab .close-tab { padding: 5px 11px; color: #9199ac; }
+.file-glyph { color: #92b4d1; font-size: 9px; margin-right: 8px; }
+.dirty { font-size: 8px; color: #c6b1ff; margin-left: 9px; }
+.editor-path { height: 41px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 19px; color: #727d92; font-size: 10px; }
+.editor-path button { padding: 3px 8px; font-size: 10px; background: transparent; border-color: transparent; }
+.editor-content { flex: 1; position: relative; min-height: 0; }
+.code-editor { position: absolute; inset: 0; }
+.hidden { visibility: hidden; }
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; }
+.graph-empty { flex: 1; background-image: radial-gradient(#353b48 1px, transparent 1px); background-size: 24px 24px; }
+.empty h1 { font-size: 23px; font-weight: 500; letter-spacing: -.7px; margin: 28px 0 4px; }
+.empty p { font-size: 12px; line-height: 1.9; color: #858fa3; }
+.empty small { font-size: 10px; margin-top: 18px; color: #687287; }
+.primary { background: #b5a0ee; color: #211c2d; font-size: 12px; font-weight: 600; padding: 11px 19px; border-color: transparent; margin-top: 16px; }
+.primary:hover:not(:disabled) { background: #c9b7ff; }
+.primary span { margin-left: 25px; }
+.orbit { position: relative; border: 1px solid #554765; border-radius: 50%; width: 138px; height: 114px; display: grid; place-items: center; transform: rotate(-15deg); }
+.orbit span { background: #3c314f; border: 1px solid #9f89c5; border-radius: 13px; width: 53px; height: 47px; display: grid; place-items: center; font-size: 33px; color: #ceb8f3; transform: rotate(15deg); }
+.orbit i { position: absolute; width: 18px; height: 18px; border: 1px solid #827094; background: #302839; border-radius: 5px; }
+.orbit i:nth-child(1) { top: -7px; left: 51px; }.orbit i:nth-child(2) { bottom: 4px; left: 4px; }.orbit i:nth-child(3) { right: -5px; bottom: 29px; }
+.editor-empty { height: 100%; padding-bottom: 85px; }
+.code-symbol { font: 43px Consolas, monospace; color: #434759; letter-spacing: 7px; }
+.editor-empty h2 { font-size: 17px; font-weight: 400; color: #a5adbf; margin: 24px 0 0; }
+.shortcut-list { display: grid; gap: 17px; margin-top: 27px; width: 210px; }
+.shortcut-list span { display: flex; justify-content: space-between; font-size: 11px; color: #757f94; }
+.shortcut-list kbd { color: #a6acc0; border: 1px solid #343947; padding: 2px 7px; border-radius: 4px; }
+.statusbar { height: 29px; flex-shrink: 0; display: flex; align-items: center; gap: 14px; background: #1c202a; border-top: 1px solid #303644; padding: 0 15px; color: #919bb0; font-size: 10px; white-space: nowrap; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: #9abe9f; margin-right: -7px; }.status-divider { height: 12px; width: 1px; background: #3c4352; }.status-spacer { flex: 1; }
+.server.unavailable { color: #d8b584; }.server.ready { color: #a3c4a9; }
+.error { background: #4b3033; color: #f2c3c0; padding: 9px 16px; display: flex; align-items: center; gap: 20px; font-size: 12px; }.error span { flex: 1; }.error button { padding: 0 7px; background: transparent; border: none; }
+@media (max-width: 900px) { .project-title { display: none; }.graph-pane { width: 40%; min-width: 290px; }.graph-footer { flex-direction: column; }.statusbar { gap: 8px; } }
