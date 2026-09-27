@@ -1,8 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, type IpcMainInvokeEvent } from 'electron';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ProjectFilesystem } from './filesystem';
 import { LanguageServerManager } from './languageServer/LanguageServerManager';
+import { BuildRunner } from './build/BuildRunner';
+import type { BuildSettings, LanguageFeature, Position, SourceLocation } from '../shared/types';
 
 const filesystem = new ProjectFilesystem();
 const openedFiles = new Set<string>();
@@ -14,6 +16,9 @@ const servers = new LanguageServerManager(
   event => { if (window && !window.isDestroyed()) window.webContents.send('lsp:diagnostics', event); },
   event => { if (window && !window.isDestroyed()) window.webContents.send('lsp:status', event); },
 );
+const builds = new BuildRunner(filesystem, event => {
+  if (window && !window.isDestroyed()) window.webContents.send('build:event', event);
+});
 const devURL = !app.isPackaged ? process.env.SOURVIA_DEV_URL : undefined;
 if (devURL && devURL !== 'http://127.0.0.1:5173') throw new Error('Invalid development URL.');
 const rendererFile = path.join(__dirname, '../renderer/index.html');
@@ -54,6 +59,7 @@ app.whenReady().then(() => {
   handle('project:open', async () => {
     const result = await dialog.showOpenDialog(window, { title: 'Open project folder', properties: ['openDirectory'] });
     if (result.canceled || !result.filePaths[0]) return null;
+    await builds.stop();
     const directory = await filesystem.open(result.filePaths[0]);
     await servers.setRoot(directory.root);
     openedFiles.clear();
@@ -67,6 +73,39 @@ app.whenReady().then(() => {
     openedFiles.add(document.path);
     return document;
   });
+  handle('file:readUri', async (uri: string) => {
+    const document = await filesystem.read(fileURLToPath(uri));
+    openedFiles.add(document.path);
+    return document;
+  });
+  handle('build:detect', () => builds.detect());
+  handle('build:start', (settings: BuildSettings, run: boolean) => {
+    if (typeof run !== 'boolean') throw new Error('Invalid run flag.');
+    builds.start(settings, run);
+  });
+  handle('build:stop', () => builds.stop());
+  for (const feature of ['definition', 'hover', 'completion'] as LanguageFeature[]) {
+    handle(`lsp:${feature}`, async (file: string, text: string, position: Position) => {
+      if (!openedFiles.has(file)) throw new Error('Open the document first.');
+      if (typeof text !== 'string' || Buffer.byteLength(text) > 8 * 1024 * 1024) throw new Error('Invalid document text.');
+      if (!position || !Number.isInteger(position.line) || position.line < 0 || !Number.isInteger(position.character) || position.character < 0) throw new Error('Invalid source position.');
+      const root = filesystem.root;
+      const result = await servers.feature(feature, file, text, position);
+      if (root !== filesystem.root || !openedFiles.has(file)) return null;
+      if (feature !== 'definition') return result;
+      const locations: SourceLocation[] = [];
+      for (const entry of result ? (Array.isArray(result) ? result : [result]) : []) {
+        const uri = entry.targetUri ?? entry.uri;
+        const range = entry.targetSelectionRange ?? entry.range;
+        if (!range || ![range.start, range.end].every(p => p && Number.isInteger(p.line) && p.line >= 0 && Number.isInteger(p.character) && p.character >= 0)) continue;
+        try {
+          const target = await filesystem.resolve(fileURLToPath(uri));
+          locations.push({ uri: pathToFileURL(target).href, range });
+        } catch { /* Navigation follows the same project boundary as file reads. */ }
+      }
+      return locations;
+    });
+  }
   handle('file:save', async (file: string, text: string) => {
     await filesystem.save(file, text);
     void servers.saved(await filesystem.resolve(file), text).catch(console.error);
@@ -100,5 +139,5 @@ app.on('before-quit', event => {
   if (quitting) return;
   event.preventDefault();
   quitting = true;
-  void servers.stop().finally(() => app.quit());
+  void Promise.all([servers.stop(), builds.stop()]).finally(() => app.quit());
 });

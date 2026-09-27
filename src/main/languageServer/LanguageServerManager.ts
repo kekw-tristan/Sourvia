@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { languageForPath } from '../../shared/languages';
-import type { DiagnosticsEvent, ServerStatus } from '../../shared/types';
+import type { DiagnosticsEvent, LanguageFeature, Position, ServerStatus } from '../../shared/types';
 import { LanguageServer } from './LanguageServer';
 import { languageServers, type LanguageServerConfig } from './config';
 
@@ -26,6 +26,12 @@ export class LanguageServerManager {
   }
   async close(file: string) {
     await Promise.all([...this.servers.values()].map(server => server.close(pathToFileURL(file).href)));
+  }
+  async feature(feature: LanguageFeature, file: string, text: string, position: Position) {
+    await this.sync(file, text);
+    const config = this.configs.find(c => c.extensions.includes(path.extname(file).toLowerCase()));
+    const server = config && this.servers.get(config.id);
+    return server ? server.feature(feature, pathToFileURL(file).href, position) : null;
   }
   async saved(file: string, text: string) {
     await this.sync(file, text);

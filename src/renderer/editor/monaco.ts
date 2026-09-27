@@ -1,4 +1,11 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import 'monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/goToCommands';
+import 'monaco-editor/esm/vs/editor/contrib/gotoSymbol/browser/link/goToDefinitionAtPosition';
+import 'monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution';
+import 'monaco-editor/esm/vs/editor/contrib/suggest/browser/suggestController';
+import 'monaco-editor/esm/vs/editor/contrib/snippet/browser/snippetController2';
+import 'monaco-editor/esm/vs/editor/contrib/gotoError/browser/gotoError';
+import 'monaco-editor/esm/vs/editor/contrib/contextmenu/browser/contextmenu';
 import 'monaco-editor/esm/vs/basic-languages/cpp/cpp.contribution';
 import 'monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution';
 import 'monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution';

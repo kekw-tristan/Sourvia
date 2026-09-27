@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { encodeMessage, MessageReader, type RpcMessage } from './jsonRpc';
 import type { LanguageServerConfig } from './config';
-import type { DiagnosticsEvent, ServerStatus } from '../../shared/types';
+import type { DiagnosticsEvent, LanguageFeature, Position, ServerStatus } from '../../shared/types';
 
 interface SyncedDocument { text: string; version: number }
 export class LanguageServer {
@@ -19,6 +19,7 @@ export class LanguageServer {
   private failed = false;
   private shutdown?: Promise<void>;
   private saveCapability: boolean | { includeText?: boolean } = false;
+  private capabilities: Record<string, unknown> = {};
 
   constructor(readonly config: LanguageServerConfig, private root: string,
     private diagnostics: (event: DiagnosticsEvent) => void, private status: (event: ServerStatus) => void) {}
@@ -97,10 +98,13 @@ export class LanguageServer {
         rootUri: pathToFileURL(this.root).href,
         workspaceFolders: [{ uri: pathToFileURL(this.root).href, name: path.basename(this.root) }],
         capabilities: { general: { positionEncodings: ['utf-16'] }, workspace: { configuration: true },
-          textDocument: { synchronization: { dynamicRegistration: false, didSave: true }, publishDiagnostics: { versionSupport: true } } },
+          textDocument: { synchronization: { dynamicRegistration: false, didSave: true }, publishDiagnostics: { versionSupport: true },
+            definition: { linkSupport: true }, hover: { contentFormat: ['markdown', 'plaintext'] },
+            completion: { completionItem: { snippetSupport: true, documentationFormat: ['markdown', 'plaintext'] } } } },
       });
       if (result?.capabilities?.positionEncoding && result.capabilities.positionEncoding !== 'utf-16') throw new Error('Only UTF-16 LSP positions are supported.');
       const sync = result?.capabilities?.textDocumentSync;
+      this.capabilities = result?.capabilities ?? {};
       this.syncKind = typeof sync === 'number' ? sync : sync?.change ?? 0;
       this.openClose = typeof sync === 'number' ? sync !== 0 : sync?.openClose === true;
       this.saveCapability = typeof sync === 'object' ? sync.save ?? false : false;
@@ -112,6 +116,11 @@ export class LanguageServer {
     const task = this.queue.then(action);
     this.queue = task.catch(() => {});
     return task;
+  }
+  async feature(feature: LanguageFeature, uri: string, position: Position): Promise<any> {
+    await this.queue;
+    if (this.failed || this.stopping || !this.documents.has(uri) || !this.capabilities[`${feature}Provider`]) return null;
+    return this.request(`textDocument/${feature}`, { textDocument: { uri }, position }, 5000);
   }
   sync(uri: string, languageId: string, text: string): Promise<void> {
     return this.enqueue(async () => {

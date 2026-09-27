@@ -12,7 +12,8 @@
     "start": "electron .",
     "test": "tsx --test tests/*.test.ts",
     "test:electron": "node scripts/electron-smoke.mjs",
-    "test:clangd": "tsx tests/clangd.integration.ts"
+    "test:clangd": "tsx tests/clangd.integration.ts",
+    "test:make": "tsx tests/make.integration.ts"
   },
   "dependencies": {
     "@xyflow/react": "^12.8.5",

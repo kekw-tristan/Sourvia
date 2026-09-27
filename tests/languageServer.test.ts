@@ -44,3 +44,30 @@ test('missing language server reports failure without an unhandled process error
   await server.stop();
   assert.ok(statuses.some(status => status.state === 'unavailable'));
 });
+
+test('language features wait for current document sync and preserve LSP results', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'sourvia-features-'));
+  const log = path.join(root, 'messages.jsonl');
+  const server = new LanguageServer({ id: 'test', extensions: ['.cpp'], command: process.execPath,
+    args: [path.resolve('tests/fixtures/lsp-server.cjs'), log] }, root, () => {}, () => {});
+  try {
+    const uri = pathToFileURL(path.join(root, 'main.cpp')).href;
+    const position = { line: 0, character: 4 };
+    await server.sync(uri, 'cpp', 'int oldValue;');
+    const sync = server.sync(uri, 'cpp', 'int newValue;');
+    const hover = await server.feature('hover', uri, position);
+    await sync;
+    assert.equal(hover.contents.value, 'Symbol info: int newValue;');
+    const definitions = await server.feature('definition', uri, position);
+    assert.equal(definitions[0].targetUri, pathToFileURL(path.join(root, 'definition.hpp')).href);
+    assert.equal(definitions[0].targetSelectionRange.start.character, 4);
+    const completion = await server.feature('completion', uri, position);
+    assert.equal(completion.items[0].label, 'sampleValue');
+    await server.close(uri);
+    assert.equal(await server.feature('hover', uri, position), null);
+    await server.stop();
+    const messages = (await fs.readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+    assert.deepEqual(messages.find(m => m.method === 'textDocument/hover').params.position, position);
+    assert.equal(messages[0].params.capabilities.textDocument.definition.linkSupport, true);
+  } finally { await server.stop(); await fs.rm(root, { recursive: true, force: true }); }
+});

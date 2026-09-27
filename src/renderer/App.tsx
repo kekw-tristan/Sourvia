@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Directory, DiagnosticsEvent, ServerStatus } from '../shared/types';
+import type { BuildSettings, BuildState, Directory, DiagnosticsEvent, ServerStatus } from '../shared/types';
 import { ProjectGraph } from './components/ProjectGraph';
 import { EditorTabs } from './components/EditorTabs';
 import { CodeEditor } from './components/CodeEditor';
 import { documents, useDocuments } from './editor/documentStore';
+import { RunSettings } from './components/RunSettings';
+import { OutputPanel } from './components/OutputPanel';
+import { monaco } from './editor/monaco';
+import { canDetectExecutable, restoreBuildSettings } from '../shared/buildSettings';
 
 export function App() {
   const { documents: items, active } = useDocuments();
@@ -15,6 +19,14 @@ export function App() {
   const [diagnostics, setDiagnostics] = useState<Record<string, DiagnosticsEvent>>({});
   const [servers, setServers] = useState<Record<string, ServerStatus>>({});
   const [position, setPosition] = useState({ line: 1, column: 1 });
+  const [buildSettings, setBuildSettings] = useState<BuildSettings | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [buildState, setBuildState] = useState<BuildState>({ phase: 'idle', message: 'Ready to build.' });
+  const [buildDiagnostics, setBuildDiagnostics] = useState<Record<string, DiagnosticsEvent>>({});
+  const [output, setOutput] = useState('');
+  const [panel, setPanel] = useState<'output' | 'problems' | null>(null);
+  const [selection, setSelection] = useState<{ path: string; line: number; column: number; id: number } | null>(null);
+  const building = ['generating', 'building', 'running', 'stopping'].includes(buildState.phase);
   const sent = useRef(new Map<string, string>());
   const current = items.find(d => d.path === active);
 
@@ -49,6 +61,13 @@ export function App() {
       const next = await window.desktop.openFolder();
       if (!next) return;
       documents.reset(); sent.current.clear(); setDiagnostics({}); setServers({});
+      setSelection(null); setBuildDiagnostics({}); setOutput(''); setPanel(null); setShowSettings(false);
+      setBuildState({ phase: 'idle', message: 'Ready to build.' }); setBuildSettings(null);
+      const detected = await window.desktop.detectBuild();
+      try {
+        const stored = JSON.parse(localStorage.getItem(`sourvia:run:${next.root}`) ?? 'null');
+        setBuildSettings(restoreBuildSettings(detected, stored));
+      } catch { setBuildSettings(detected); }
       setDirectory(next); setHistory([]);
     });
   }
@@ -72,11 +91,39 @@ export function App() {
       documents.close(path); sent.current.delete(path);
     });
   }
+  async function openLocation(uri: string, line: number, column: number) {
+    await run(async () => {
+      const existing = documents.get().documents.find(file => monaco.Uri.parse(file.uri).toString() === monaco.Uri.parse(uri).toString());
+      const file = existing ?? await window.desktop.readUri(uri);
+      documents.open(file);
+      setSelection({ path: file.path, line, column, id: Date.now() });
+    });
+  }
+  function saveSettings(settings: BuildSettings) {
+    setBuildSettings(settings); setShowSettings(false);
+    try { localStorage.setItem(`sourvia:run:${directory!.root}`, JSON.stringify(settings)); }
+    catch { setError('Settings apply for this session but could not be saved.'); }
+  }
+  async function startBuild(execute: boolean) {
+    if (!buildSettings || building) return;
+    if (execute && !buildSettings.executable.trim() && !canDetectExecutable(buildSettings)) { setShowSettings(true); return; }
+    await run(async () => {
+      for (const file of documents.get().documents) await save(file.path);
+      if (documents.get().documents.some(file => file.text !== file.savedText)) throw new Error('Files changed while saving. Please start the build again.');
+      setOutput(''); setBuildDiagnostics({}); setPanel('output');
+      await window.desktop.startBuild(buildSettings, execute);
+    });
+  }
 
   useEffect(() => {
     const offDiagnostics = window.desktop.onDiagnostics(event => setDiagnostics(previous => ({ ...previous, [event.uri]: event })));
     const offStatus = window.desktop.onServerStatus(event => setServers(previous => ({ ...previous, [event.id]: event })));
-    return () => { offDiagnostics(); offStatus(); };
+    const offBuild = window.desktop.onBuildEvent(event => {
+      if (event.type === 'output') setOutput(previous => (previous + event.text).slice(-256000));
+      if (event.type === 'state') setBuildState(event.state);
+      if (event.type === 'diagnostics') setBuildDiagnostics(previous => ({ ...previous, [event.event.uri]: event.event }));
+    });
+    return () => { offDiagnostics(); offStatus(); offBuild(); };
   }, []);
   useEffect(() => {
     window.desktop.setDirty(items.some(d => d.text !== d.savedText));
@@ -93,6 +140,14 @@ export function App() {
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       const modifier = event.ctrlKey || event.metaKey;
+      if (event.key === 'F5' || (modifier && event.shiftKey && event.key.toLowerCase() === 'b')) {
+        event.preventDefault(); event.stopPropagation();
+        if (showSettings || busyRef.current) return;
+        if (event.key === 'F5' && event.shiftKey) void window.desktop.stopBuild().catch(report);
+        else void startBuild(event.key === 'F5');
+        return;
+      }
+      if (showSettings) return;
       if (modifier && ['o', 's', 'w', 'Tab'].includes(event.key)) {
         event.preventDefault(); event.stopPropagation();
         if (busyRef.current) return;
@@ -118,12 +173,19 @@ export function App() {
     return () => { window.removeEventListener('keydown', keydown, true); window.removeEventListener('beforeunload', beforeUnload); };
   });
 
-  const problemCount = Object.values(diagnostics).reduce((sum, event) => sum + event.diagnostics.length, 0);
+  const allDiagnostics = [...Object.values(diagnostics), ...Object.values(buildDiagnostics)];
+  const problemCount = allDiagnostics.reduce((sum, event) => sum + event.diagnostics.length, 0);
   return <div className="app">
     <header className="topbar">
       <div className="brand"><span className="brand-mark">S</span>Sourvia<span className="badge">PREVIEW</span></div>
       <div className="project-title">{directory?.root.split(/[\\/]/).pop() ?? 'Your next idea starts here'}<span>{directory ? 'LOCAL WORKSPACE' : 'VISUAL CODE EDITOR'}</span></div>
-      <button className="open-button" disabled={busy} onClick={() => void openFolder()}>Open folder <kbd>Ctrl O</kbd></button>
+      <div className="build-controls">
+        <button disabled={busy || building || !buildSettings} onClick={() => void startBuild(false)} title="Build · Ctrl+Shift+B">Build</button>
+        <button className="run-button" disabled={busy || building || !buildSettings} onClick={() => void startBuild(true)} title="Save, build and run · F5">▶ Run</button>
+        {building && <button disabled={buildState.phase === 'stopping'} onClick={() => void window.desktop.stopBuild().catch(report)} title="Stop · Shift+F5">■ Stop</button>}
+        <button disabled={!buildSettings || busy || building} onClick={() => setShowSettings(true)} aria-label="Run settings" title="Build & Run settings">⚙</button>
+        <button className="open-button" disabled={busy || building} onClick={() => void openFolder()}>Open folder <kbd>Ctrl O</kbd></button>
+      </div>
     </header>
     {error && <div className="error" role="alert"><span>{error}</span><button onClick={() => setError('')} aria-label="Dismiss error">×</button></div>}
     <main className="workspace">
@@ -139,12 +201,16 @@ export function App() {
       <section className="editor-pane" aria-label="Code editor">
         <EditorTabs items={items} active={active} onSelect={documents.activate} onClose={path => void closeFile(path)} />
         <div className="editor-path">{current ? <><span>{current.name}</span><button disabled={busy || current.text === current.savedText} onClick={() => void run(() => save(current.path))}>Save <kbd>Ctrl S</kbd></button></> : <span>EDITOR</span>}</div>
-        <div className="editor-content"><CodeEditor items={items} active={active} diagnostics={diagnostics} onPosition={(line, column) => setPosition({ line, column })} />
+        <div className="editor-content"><CodeEditor items={items} active={active} diagnostics={diagnostics} buildDiagnostics={buildDiagnostics}
+          selection={selection} onOpenLocation={openLocation} onError={report} onPosition={(line, column) => setPosition({ line, column })} />
           {!current && <div className="empty editor-empty"><div className="code-symbol">{ '{ }' }</div><h2>Make room for your code.</h2><p>Select a file on the map to begin editing.</p><div className="shortcut-list"><span>Open folder <kbd>Ctrl O</kbd></span><span>Save file <kbd>Ctrl S</kbd></span><span>Switch tabs <kbd>Ctrl Tab</kbd></span></div></div>}
         </div>
       </section>
     </main>
-    <footer className="statusbar"><span className="status-dot" /><span>{busy ? 'Working…' : 'Ready'}</span><span className="status-divider" /><span>{problemCount} problems</span>
+    {panel && <OutputPanel tab={panel} onTab={setPanel} onClose={() => setPanel(null)} onClear={() => setOutput('')} output={output} state={buildState} diagnostics={allDiagnostics} onOpenLocation={openLocation} />}
+    {showSettings && buildSettings && <RunSettings settings={buildSettings} onSave={saveSettings} onClose={() => setShowSettings(false)} />}
+    <footer className="statusbar"><span className="status-dot" /><span>{busy ? 'Working…' : 'Ready'}</span><span className="status-divider" /><button onClick={() => setPanel(panel === 'problems' ? null : 'problems')}>{problemCount} problems</button>
+      <button onClick={() => setPanel(panel === 'output' ? null : 'output')}>{buildState.phase === 'idle' ? 'Output' : buildState.message}</button>
       {Object.values(servers).map(server => <span key={server.id} className={`server ${server.state}`} title={server.message}>{server.id}: {server.state}</span>)}
       <span className="status-spacer" /><span>{current ? `Ln ${position.line}, Col ${position.column}` : 'No file selected'}</span><span>{current?.language.toUpperCase()}</span><span>UTF-8</span>
     </footer>
