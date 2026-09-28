@@ -4,6 +4,8 @@ Ein kleiner Electron-Editor für Windows und Linux. Das Projekt wird als lokale
 Mindmap navigiert: Der aktuelle Ordner liegt im Zentrum, seine direkten Dateien
 und Unterordner liegen darum herum. Monaco übernimmt den Texteditor.
 
+![v1](images/v1.png)
+
 ## Starten
 
 Voraussetzung: Node.js **22.12 oder neuer** und npm. Linux benötigt eine grafische
@@ -17,12 +19,14 @@ npm run dev
 React-Änderungen werden im Entwicklungsmodus automatisch aktualisiert.
 Nach Änderungen an Main oder Preload den Entwicklungsprozess neu starten.
 
-Produktionsbuild und Start:
+Produktionsbuild und Start (der Build wird automatisch vor dem Start erstellt):
 
 ```sh
-npm run build
 npm start
 ```
+
+Falls PowerShell die Ausführung von `npm.ps1` blockiert, die Befehle mit
+`npm.cmd` ausführen, zum Beispiel `npm.cmd install` und `npm.cmd start`.
 
 Electron und Monaco werden lokal installiert; der Editor benötigt zur Laufzeit
 keinen CDN-Zugriff. Der MVP enthält noch keinen Installer.

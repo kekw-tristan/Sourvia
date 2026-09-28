@@ -9,6 +9,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "tsc -p tsconfig.main.json && vite build",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "prestart": "npm run build",
     "start": "electron .",
     "test": "tsx --test tests/*.test.ts",
     "test:electron": "node scripts/electron-smoke.mjs",
